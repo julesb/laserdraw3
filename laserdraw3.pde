@@ -6,8 +6,6 @@ NetAddress network;
 
 ArrayList<ArrayList> paths = new ArrayList();
 
-float[] pointsX;
-float[] pointsY;  
 float[] pointsXYRGB;
 
 Point closestPoint = new Point(0,0);
@@ -22,7 +20,7 @@ boolean dragging = false;
 
 int pointSelectRadius = 40;
 boolean snapToGrid = true;
-float gridScale = 100;
+float gridScale = 20;
 
 int beamStrokeWeight = 6;
 int blankStrokeWeight = 1;
@@ -71,7 +69,14 @@ void draw() {
     int[] col = colors[currentColorIdx];
     stroke(col[0], col[1], col[2]);
     strokeWeight(1);
-    line(mouseX-width/2, mouseY-height/2, createdPoint.x, createdPoint.y);
+    float cx = mouseX-width/2;
+    float cy = mouseY-width/2;
+    if (snapToGrid) {
+      cx = snapToGrid(cx);
+      cy = snapToGrid(cy);
+    }
+    
+    line(cx, cy, createdPoint.x, createdPoint.y);
   }
   
   // draw last added point
@@ -84,6 +89,10 @@ void draw() {
   
   drawBeamPath();
   popMatrix();
+  if (snapToGrid) {
+    drawGrid();
+    drawGridCursor();
+  }
   drawColorIndicator(30, 30, 30);
 }
 
@@ -111,8 +120,15 @@ void mouseDragged() {
   }
   if (mouseButton == CENTER
   && closestPoint.dist(new Point(mousePos.x, mousePos.y)) < pointSelectRadius) {
-    closestPoint.x = mousePos.x;
-    closestPoint.y = mousePos.y;
+    
+    if(snapToGrid) {
+      closestPoint.x = snapToGrid(mousePos.x);
+      closestPoint.y = snapToGrid(mousePos.y);
+    }
+    else {
+      closestPoint.x = mousePos.x;
+      closestPoint.y = mousePos.y;    
+    }
     updatePointsXYRGB();
     sendXYRGB();
   }
@@ -125,6 +141,10 @@ void mousePressed() {
   if (mouseButton == LEFT) {
     int[] col = colors[currentColorIdx];
     Point newPoint = new Point(mousePos.x, mousePos.y, col);
+    if (snapToGrid) {
+      newPoint.x = snapToGrid(newPoint.x);
+      newPoint.y = snapToGrid(newPoint.y);
+    }
 
     if (paths.size() == 0) {
       paths.add(new ArrayList<Point>());
@@ -174,6 +194,24 @@ void keyTyped() {
       drawBlanks = !drawBlanks;
       break;
 
+    case 'g':
+      snapToGrid = ! snapToGrid;
+      break;
+
+    case '=':
+      if (gridScale > 2) {
+        gridScale-=2;
+      }
+      println("grid: " + gridScale);
+      break;
+
+    case '-':
+      if (gridScale < 32) {
+        gridScale+=2;
+      }
+      println("grid: " + gridScale);
+      break;
+
     case '0':
       currentColorIdx = 0;
       break;
@@ -198,8 +236,45 @@ void keyTyped() {
     case '7':
       currentColorIdx = 7;
       break;
-      
   }
+}
+
+
+void drawGrid() {
+  float dim = width / gridScale;
+  stroke(64);
+  strokeWeight(1);
+  for (int y=0; y < dim; y++) {
+    float x1 = 0;
+    float y1 = y*dim;
+    float x2 = width;
+    float y2 = y*dim;
+    line(x1, y1, x2, y2);
+  }
+  for (int x=0; x < dim; x++) {
+    float x1 = x*dim;
+    float y1 = 0;
+    float x2 = x*dim;
+    float y2 = height;
+    line(x1, y1, x2, y2);
+  }
+}
+
+void drawGridCursor() {
+  float x = snapToGrid(mouseX);
+  float y = snapToGrid(mouseY);
+  stroke(255);
+  strokeWeight(2);
+  ellipse(x, y, 5, 5);
+}
+
+float snapToGrid(float x) {
+  float xn = x / width;
+  xn *= gridScale;
+  xn = Math.round(xn);
+  xn /= gridScale;
+  xn *= width;
+  return xn;
 }
 
 void drawBeamPath() {
@@ -216,7 +291,7 @@ void drawBeamPath() {
       line(v1.x, v1.y, v2.x, v2.y);
     }
     
-    // draw blank line
+    // draw blank line to join paths
     if (pidx < paths.size()-1 && drawBlanks) {
       ArrayList nextpath = paths.get(pidx+1);
       if (nextpath.size() > 0) {
@@ -228,6 +303,20 @@ void drawBeamPath() {
     }
     
   }
+  
+  // draw blank line from last point to first point
+  if (paths.size() > 0 && drawBlanks) {
+    ArrayList firstpath = paths.get(0);
+    if (firstpath.size() > 0) {
+      Point first = (Point)firstpath.get(0);
+      ArrayList lastpath = paths.get(paths.size()-1);
+      Point last = (Point)lastpath.get(lastpath.size()-1);
+        strokeWeight(blankStrokeWeight);
+        stroke(64,64,64);
+        line(last.x, last.y, first.x, first.y);      
+    }
+  }
+  
 }
 
 void drawColorIndicator(int x, int y, int rad) {
