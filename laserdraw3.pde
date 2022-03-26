@@ -112,14 +112,18 @@ void mouseDragged() {
   //println("dragged");
   mousePos.x = mouseX-width/2;
   mousePos.y = mouseY-height/2;
-   
+  
+  float actualSelectRadius = pointSelectRadius;
+  if (snapToGrid) {
+    actualSelectRadius = max(pointSelectRadius, width/gridScale*2);
+  }
    
   if (paths.size() > 0) {
     int[] idxs = findclosestpoint(mousePos);
     closestPoint = (Point)paths.get(idxs[0]).get(idxs[1]);
   }
   if (mouseButton == CENTER
-  && closestPoint.dist(new Point(mousePos.x, mousePos.y)) < pointSelectRadius) {
+  && closestPoint.dist(new Point(mousePos.x, mousePos.y)) < actualSelectRadius) {
     
     if(snapToGrid) {
       closestPoint.x = snapToGrid(mousePos.x);
