@@ -52,6 +52,14 @@ void setup() {
 
 void draw() {
   background(0);
+  
+  if (snapToGrid) {
+    drawGrid();
+    drawGridCursor();
+  }
+
+  drawColorIndicator(30, 30, 30);
+  
   pushMatrix();
   translate(width/2, height/2);
 
@@ -89,11 +97,6 @@ void draw() {
   
   drawBeamPath();
   popMatrix();
-  if (snapToGrid) {
-    drawGrid();
-    drawGridCursor();
-  }
-  drawColorIndicator(30, 30, 30);
 }
 
 
@@ -246,7 +249,7 @@ void keyTyped() {
 
 void drawGrid() {
   float dim = width / gridScale;
-  stroke(64);
+  stroke(48);
   strokeWeight(1);
   for (int y=0; y < dim; y++) {
     float x1 = 0;
@@ -339,12 +342,22 @@ void drawColorIndicator(int x, int y, int rad) {
 void updatePointsXYRGB() {
   int numpoints = getpointcount(paths);
   println("points:" + numpoints);
-  pointsXYRGB = new float[numpoints*5 + paths.size()*5];
+  pointsXYRGB = new float[numpoints*5 + (paths.size()*5 *2)];
   
   int idx = 0;
   Point p = null;
   for(int pidx = 0; pidx < paths.size(); pidx++) {
     ArrayList path = paths.get(pidx);
+    // insert a blank point at the start of each path
+    p = (Point)path.get(0);
+    if (p != null) {
+      pointsXYRGB[idx+0] = p.x / width*2 * 2047;
+      pointsXYRGB[idx+1] = p.y / width*2 * 2047;
+      pointsXYRGB[idx+2] = 0;
+      pointsXYRGB[idx+3] = 0;
+      pointsXYRGB[idx+4] = 0;
+      idx+=5;
+    }
     for (int vidx = 0; vidx < path.size(); vidx++) {
       p = (Point)path.get(vidx);
       pointsXYRGB[idx+0] = p.x / width*2 * 2047;
