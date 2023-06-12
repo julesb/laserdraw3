@@ -1,5 +1,6 @@
 import oscP5.*;
 import netP5.*;
+import java.util.zip.Deflater;
 
 OscP5 oscP5;
 NetAddress network;
@@ -26,6 +27,7 @@ int beamStrokeWeight = 6;
 int blankStrokeWeight = 1;
 boolean drawBlanks = true;
 
+boolean oscEnabled = true;
 
 int currentColorIdx = 1;
 int[][] colors = {
@@ -44,7 +46,7 @@ void setup() {
   size(1024,1024);
   frameRate(30);
   oscP5 = new OscP5(this,12000);
-  network = new NetAddress("127.0.0.1",12000);
+  network = new NetAddress("nuc",12000);
   blendMode(ADD);
 }
 
@@ -97,6 +99,7 @@ void draw() {
   
   drawBeamPath();
   popMatrix();
+  //sendXYRGB();
 }
 
 
@@ -108,6 +111,9 @@ void mouseMoved() {
     int[] idxs = findclosestpoint(mousePos);
     closestPoint = (Point)paths.get(idxs[0]).get(idxs[1]);
   }
+
+  updatePointsXYRGB();
+  sendXYRGB();
 }
 
 
@@ -136,8 +142,8 @@ void mouseDragged() {
       closestPoint.x = mousePos.x;
       closestPoint.y = mousePos.y;    
     }
-    updatePointsXYRGB();
-    sendXYRGB();
+    //updatePointsXYRGB();
+    //sendXYRGB();
   }
 
 }
@@ -342,7 +348,8 @@ void drawColorIndicator(int x, int y, int rad) {
 void updatePointsXYRGB() {
   int numpoints = getpointcount(paths);
   println("points:" + numpoints);
-  pointsXYRGB = new float[numpoints*5 + (paths.size()*5 *2)];
+  int cursordwell = 8;
+  pointsXYRGB = new float[numpoints*5 + (paths.size()*5 *2) + cursordwell*5];
   
   int idx = 0;
   Point p = null;
@@ -377,17 +384,78 @@ void updatePointsXYRGB() {
       idx+=5;
     }
   }
+
+  float mx = mousePos.x*4; //mouseX / width/2.0 * 2047;
+  float my = mousePos.y*4; //mouseY / height/2.0 * 2047;
+  println("MOUSE ", mx, my);
+  for (int i=0; i < cursordwell; i++) {
+    pointsXYRGB[idx+0] = mx;
+    pointsXYRGB[idx+1] = my;
+    if (i == 0 || i == cursordwell-1) {
+      pointsXYRGB[idx+2] = 0;
+      pointsXYRGB[idx+3] = 0;
+      pointsXYRGB[idx+4] = 0;
+    }
+    else {
+      pointsXYRGB[idx+2] = colors[currentColorIdx][0];
+      pointsXYRGB[idx+3] = colors[currentColorIdx][1];
+      pointsXYRGB[idx+4] = colors[currentColorIdx][2];
+    }
+    idx += 5;
+  }
+
 }
 
 
 void sendXYRGB() {
-  if (pointsXYRGB != null && pointsXYRGB.length > 0) {
-    println("sending " + pointsXYRGB.length);
-    OscMessage pointsxMessage = new OscMessage("/xyrgb");
-    pointsxMessage.add(pointsXYRGB);
-    oscP5.send(pointsxMessage, network);
+  if (! oscEnabled) {
+    return;
   }
+  int numpoints = pointsXYRGB.length / 5;
+  if (numpoints == 0) {
+    return;
+  }
+  byte[] packedData = new byte[numpoints * 7]; // 7 bytes for each point
+
+  for (int i = 0; i < numpoints; i++) {
+    int pidx = i * 5;
+    int offset = i * 7;
+    int x = floor((0.5 + 0.5 * (pointsXYRGB[pidx+0]*-1 / 2047)) * 65535);
+    int y = floor((0.5 + 0.5 * (pointsXYRGB[pidx+1] / 2047)) * 65535);
+    int r = floor(pointsXYRGB[pidx+2]);
+    int g = floor(pointsXYRGB[pidx+3]);
+    int b = floor(pointsXYRGB[pidx+4]);
+
+    packUInt16(packedData, offset + 0, x);
+    packUInt16(packedData, offset + 2, y);
+    packUInt8(packedData, offset + 4, r);
+    packUInt8(packedData, offset + 5, g);
+    packUInt8(packedData, offset + 6, b);
+  }
+
+  Deflater deflater = new Deflater();
+  deflater.setInput(packedData);
+  deflater.finish();
+  byte[] compressedData = new byte[packedData.length];
+  int compressedDataLength = deflater.deflate(compressedData);
+
+  OscMessage msg = new OscMessage("/f");
+  msg.add(compressedData);
+  oscP5.send(msg, network);
 }
+
+void packUInt16(byte[] bytes, int offset, int value) {
+  bytes[offset] = (byte) (value & 0xFF);
+  bytes[offset + 1] = (byte) ((value >> 8) & 0xFF);
+}
+
+void packUInt8(byte[] bytes, int offset, int value) {
+  bytes[offset] = (byte) (value & 0xFF);
+}
+  
+
+
+
 
 // Find [pathidx, pointindex, distance] of closest point to p
 int[] findclosestpoint(Point p) {
